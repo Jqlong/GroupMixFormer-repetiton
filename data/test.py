@@ -3,7 +3,8 @@ import os
 from scapy.all import rdpcap
 import numpy as np
 from scapy.all import rdpcap, TCP, UDP
-import cv2
+# import cv2
+from PIL import Image
 
 
 # 读取并处理单个会话文件（pcap 文件）
@@ -15,7 +16,7 @@ def extract_application_layer_packets(pcap_file, max_packets=16, packet_size=256
             payload = bytes(packet[TCP].payload if packet.haslayer(TCP) else packet[UDP].payload)  # 提取应用层的数据
             if payload:
                 app_layer_packets.append(payload)
-    print(app_layer_packets)
+    # print(app_layer_packets)
 
     return app_layer_packets
 
@@ -60,69 +61,69 @@ def process_pcap_to_session_image(pcap_file):
     return session_image
 
 
-def save_grayscale_image_4x4(session_image, filename):
-    # 将session_image的形状从 (n=16, sp=16, sp=16) 调整为4x4排列
-    n, sp, _ = session_image.shape  # n=16, sp=16 (包数量和每包的图像大小)
+def save_grayscale_image_4x4_pil(session_image, pcap_file, output_dir):
+    # 提取pcap文件名，不包括扩展名
+    base_filename = os.path.splitext(os.path.basename(pcap_file))[0]
 
-    # 确保有4x4的排列方式
-    rows = []
-    for i in range(0, n, 4):
-        # 将每4个图像横向拼接
-        row = np.hstack(session_image[i:i + 4])
-        rows.append(row)
+    # 生成图像文件名，保持与原始文件夹结构一致
+    image_filename = os.path.join(output_dir, f"{base_filename}.png")
 
-    # 将所有行纵向拼接成最终的图像
-    combined_image = np.vstack(rows)
+    # session_image的形状是 (n=16, sp=16, sp=16)
+    n, sp, _ = session_image.shape  # n=16, sp=16
+
+    # 创建一个空的64x64灰度图像 (4*sp, 4*sp)
+    combined_image = Image.new('L', (4 * sp, 4 * sp))  # 'L'模式表示灰度图像
+
+    # 将每个包图像放入对应位置
+    for i in range(4):
+        for j in range(4):
+            # 提取当前包图像
+            packet_image = session_image[i * 4 + j]
+
+            # 转换为PIL图像
+            packet_image_pil = Image.fromarray(packet_image)
+
+            # 粘贴到combined_image的正确位置
+            combined_image.paste(packet_image_pil, (j * sp, i * sp))
+
+    # 确保输出目录存在
+    os.makedirs(output_dir, exist_ok=True)
 
     # 保存为灰度图像文件
-    cv2.imwrite(filename, combined_image)
-
-# 示例流程
-pcap_file = 'your_session_file.pcap'
-session_image = process_pcap_to_session_image(pcap_file)
-
-# 保存生成的4x4排列的session图像为灰度图文件
-save_grayscale_image_4x4(session_image, 'session_image_4x4.png')
-
-    # print(raw_bytes)
-    # hex_representation = ' '.join(f'{byte:02x}' for byte in raw_bytes)
-    #
-    # print(hex_representation)
-
-    # # 截取或填充每个数据包到 256 字节
-    # if len(raw_bytes) > packet_size:
-    #     packet_data = raw_bytes[:packet_size]
-    # else:
-    #     packet_data = raw_bytes + b'\x00' * (packet_size - len(raw_bytes))
-
-    # 转换为整数数组（字节到整数）并重塑为 16x16 图像
-    # packet_image = np.frombuffer(packet_data, dtype=np.uint8).reshape((16, 16))
-    # session_data.append(packet_image)
-
-    # 如果数据包不足 16 个，填充全 0 数据包
-    # while len(session_data) < max_packets:
-    #     session_data.append(np.zeros((16, 16), dtype=np.uint8))
-    #
-    # # 将数据包图像合并为会话图像 (16 x 256)
-    # session_image = np.vstack(session_data)
-    # return session_image
+    combined_image.save(image_filename)
+    print(f"Image saved as {image_filename}")
 
 
-# 处理整个目录的会话文件
-# def process_all_session_pcaps(session_dir):
-#     session_images = []
-#     for session_file in os.listdir(session_dir):
-#         session_path = os.path.join(session_dir, session_file)
-#         if session_file.endswith('.pcap'):
-#             session_image = process_session_pcap(session_path)
-#             session_images.append(session_image)
-#
+def process_all_pcap_files(root_dir, output_root_dir):
+    # 遍历所有子文件夹和文件
+    for subdir, _, files in os.walk(root_dir):
+        for file in files:
+            if file.endswith(".pcap"):
+                pcap_file = os.path.join(subdir, file)
+
+                # 处理pcap文件，生成session图像
+                session_image = process_pcap_to_session_image(pcap_file)
+
+                # 构造图像保存路径
+                relative_path = os.path.relpath(subdir, root_dir)  # 获取相对路径
+                output_dir = os.path.join(output_root_dir, relative_path)  # 在新目录下保持相同结构
+
+                # 保存图像，保持与原始文件夹结构一致
+                save_grayscale_image_4x4_pil(session_image, pcap_file, output_dir)
+
+
+# 设置你的根目录路径
+root_dir = 'D:\\PEAN-Repetition\\PreprocessedTools\\2_Session\\AllLayers\\'
+output_root_dir = 'D:\\Users\\22357\\Desktop\\Thesis\\Datasets\\ALLayers'  # 新的输出目录
+
+# 处理所有pcap文件并保存图像
+process_all_pcap_files(root_dir, output_root_dir)
 #     return np.array(session_images)
 
 
 # 示例调用
-session_dir = 'D:\\PEAN-Repetition\\PreprocessedTools\\2_Session\\AllLayers\\FTP-ALL\\FTP.pcap.TCP_1-1-0-50_48940_1-2-179-64_25235.pcap'  # 替换为你的实际路径
-process_pcap_to_session_image(session_dir)
+# session_dir = 'D:\\PEAN-Repetition\\PreprocessedTools\\2_Session\\AllLayers\\FTP-ALL\\FTP.pcap.TCP_1-1-0-50_48940_1-2-179-64_25235.pcap'  # 替换为你的实际路径
+# process_pcap_to_session_image(session_dir)
 # process_session_pcap(session_dir)
 # session_images = process_all_session_pcaps(session_dir)
 
