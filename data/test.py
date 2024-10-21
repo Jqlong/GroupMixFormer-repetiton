@@ -3,17 +3,17 @@ import os
 from scapy.all import rdpcap
 import numpy as np
 from scapy.all import rdpcap, TCP, UDP
-# import cv2
+import cv2
 from PIL import Image
 
 
 # 读取并处理单个会话文件（pcap 文件）
-def extract_application_layer_packets(pcap_file, max_packets=16, packet_size=256):
+def extract_application_layer_packets(pcap_file, max_packets=9, packet_size=256):
     packets = rdpcap(pcap_file)  # 使用 scapy 读取 pcap 文件
     app_layer_packets = []
     for packet in packets[:max_packets]:
-        if packet.haslayer(TCP) or packet.hasLayer(UDP):
-            payload = bytes(packet[TCP].payload if packet.haslayer(TCP) else packet[UDP].payload)  # 提取应用层的数据
+        if packet.haslayer(TCP) or packet.haslayer(UDP):
+            payload = bytes(packet)  # 提取应用层的数据
             if payload:
                 app_layer_packets.append(payload)
     # print(app_layer_packets)
@@ -33,7 +33,7 @@ def payload_to_grayscale_image(payload, sp=16):
     return packet_image
 
 
-def create_session_image(app_layer_packets, n=16, sp=16):
+def create_session_image(app_layer_packets, n=9, sp=16):
     session_image = []
 
     # 保证每个会话最多有n=16个数据包，少于部分填充空数据包
@@ -56,7 +56,7 @@ def process_pcap_to_session_image(pcap_file):
     app_layer_packets = extract_application_layer_packets(pcap_file)
 
     # 创建会话图像
-    session_image = create_session_image(app_layer_packets, n=16, sp=16)
+    session_image = create_session_image(app_layer_packets, n=9, sp=16)
 
     return session_image
 
@@ -72,13 +72,13 @@ def save_grayscale_image_4x4_pil(session_image, pcap_file, output_dir):
     n, sp, _ = session_image.shape  # n=16, sp=16
 
     # 创建一个空的64x64灰度图像 (4*sp, 4*sp)
-    combined_image = Image.new('L', (4 * sp, 4 * sp))  # 'L'模式表示灰度图像
+    combined_image = Image.new('L', (3 * sp, 3 * sp))  # 'L'模式表示灰度图像
 
     # 将每个包图像放入对应位置
-    for i in range(4):
-        for j in range(4):
+    for i in range(3):
+        for j in range(3):
             # 提取当前包图像
-            packet_image = session_image[i * 4 + j]
+            packet_image = session_image[i * 3 + j]
 
             # 转换为PIL图像
             packet_image_pil = Image.fromarray(packet_image)
@@ -113,8 +113,8 @@ def process_all_pcap_files(root_dir, output_root_dir):
 
 
 # 设置你的根目录路径
-root_dir = 'D:\\PEAN-Repetition\\PreprocessedTools\\2_Session\\AllLayers\\'
-output_root_dir = 'D:\\Users\\22357\\Desktop\\Thesis\\Datasets\\ALLayers'  # 新的输出目录
+root_dir = 'F:\\PEAN-Repetition\\PreprocessedTools\\2_Session\\AllLayers'
+output_root_dir = 'F:\\Data\\ALLayer'  # 新的输出目录
 
 # 处理所有pcap文件并保存图像
 process_all_pcap_files(root_dir, output_root_dir)
