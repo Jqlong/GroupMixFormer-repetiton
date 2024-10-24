@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 from PIL import Image
 import torch
+from tqdm import tqdm
 
 
 class TrafficImageDataset(Dataset):
@@ -26,7 +27,8 @@ class TrafficImageDataset(Dataset):
         # print(self.class_to_idx)
 
         # 遍历每个类别目录并收集图片路径及其对应的标签
-        for cls_name in self.classes:
+        # for cls_name in self.classes:
+        for cls_name in tqdm(self.classes, desc="Processing"):
             cls_dir = os.path.join(root_dir, cls_name)
             if os.path.isdir(cls_dir):
                 for img_name in os.listdir(cls_dir):
@@ -34,6 +36,7 @@ class TrafficImageDataset(Dataset):
                         img_path = os.path.join(cls_dir, img_name)
                         self.image_paths.append(img_path)
                         self.labels.append(self.class_to_idx[cls_name])
+        print("数据处理完成")
 
     def __len__(self):
         # 返回数据集的大小
