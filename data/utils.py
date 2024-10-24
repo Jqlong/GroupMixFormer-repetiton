@@ -1,50 +1,60 @@
 import os
 
-from scapy.all import rdpcap
-import numpy as np
+from torch.utils.data import Dataset
+from torchvision import datasets
+from torch.utils.data import DataLoader
+import torchvision.transforms as transforms
+from PIL import Image
+import torch
 
 
-# 读取并处理单个会话文件（pcap 文件）
-def process_session_pcap(pcap_file, max_packets=16, packet_size=256):
-    packets = rdpcap(pcap_file)  # 使用 scapy 读取 pcap 文件
-    session_data = []
+class TrafficImageDataset(Dataset):
+    def __init__(self, root_dir, transform=None):
+        """
+        Args:
+            root_dir (string): 图片根目录，其中每个子目录代表一个类别。
+            transform (callable, optional): 可选的变换函数，对样本应用的转换（例如图像增强、归一化等）。
+        """
+        self.root_dir = root_dir
+        self.transform = transform
 
-    for packet in packets[:max_packets]:
-        raw_bytes = bytes(packet)  # 提取原始字节数据
+        # 收集所有图像路径以及它们的对应类别
+        self.image_paths = []
+        self.labels = []
+        self.classes = os.listdir(root_dir)  # 获取所有类别
+        self.class_to_idx = {cls_name: i for i, cls_name in enumerate(self.classes)}  # 类别映射为索引
+        # print(self.class_to_idx)
 
-        # 截取或填充每个数据包到 256 字节
-        if len(raw_bytes) > packet_size:
-            packet_data = raw_bytes[:packet_size]
-        else:
-            packet_data = raw_bytes + b'\x00' * (packet_size - len(raw_bytes))
+        # 遍历每个类别目录并收集图片路径及其对应的标签
+        for cls_name in self.classes:
+            cls_dir = os.path.join(root_dir, cls_name)
+            if os.path.isdir(cls_dir):
+                for img_name in os.listdir(cls_dir):
+                    if img_name.endswith(".png"):  # 只处理PNG图像
+                        img_path = os.path.join(cls_dir, img_name)
+                        self.image_paths.append(img_path)
+                        self.labels.append(self.class_to_idx[cls_name])
 
-        # 转换为整数数组（字节到整数）并重塑为 16x16 图像
-        packet_image = np.frombuffer(packet_data, dtype=np.uint8).reshape((16, 16))
-        session_data.append(packet_image)
+    def __len__(self):
+        # 返回数据集的大小
+        return len(self.image_paths)
 
-    # 如果数据包不足 16 个，填充全 0 数据包
-    while len(session_data) < max_packets:
-        session_data.append(np.zeros((16, 16), dtype=np.uint8))
+    def __getitem__(self, idx):
+        """
+        根据索引返回一个样本 (图像, 标签)。
+        """
+        img_path = self.image_paths[idx]
+        label = self.labels[idx]
 
-    # 将数据包图像合并为会话图像 (16 x 256)
-    session_image = np.vstack(session_data)
-    return session_image
+        # 加载图像
+        image = Image.open(img_path)
 
+        # 应用变换（如果有）
+        if self.transform:
+            image = self.transform(image)
+        # print(image, label)
+        return image, label
 
-# 处理整个目录的会话文件
-def process_all_session_pcaps(session_dir):
-    session_images = []
-    for session_file in os.listdir(session_dir):
-        session_path = os.path.join(session_dir, session_file)
-        if session_file.endswith('.pcap'):
-            session_image = process_session_pcap(session_path)
-            session_images.append(session_image)
+if __name__ == '__main__':
+    dir = 'D:\\Users\\22357\\Desktop\Thesis\\Datasets\\ALLayers'
 
-    return np.array(session_images)
-
-
-# 示例调用
-session_dir = '/path/to/session/files'  # 替换为你的实际路径
-session_images = process_all_session_pcaps(session_dir)
-
-# session_images: 每个会话对应一个 16x256 的图像

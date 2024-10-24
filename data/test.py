@@ -3,7 +3,7 @@ import os
 from scapy.all import rdpcap
 import numpy as np
 from scapy.all import rdpcap, TCP, UDP
-import cv2
+# import cv2
 from PIL import Image
 
 
@@ -113,8 +113,8 @@ def process_all_pcap_files(root_dir, output_root_dir):
 
 
 # 设置你的根目录路径
-root_dir = 'F:\\PEAN-Repetition\\PreprocessedTools\\2_Session\\AllLayers'
-output_root_dir = 'F:\\Data\\ALLayer'  # 新的输出目录
+root_dir = 'D:\\PEAN-Repetition\\PreprocessedTools\\2_Session\\AllLayers'
+output_root_dir = 'D:\\Users\\22357\\Desktop\\Thesis\\Datasets\\ALLayers'  # 新的输出目录
 
 # 处理所有pcap文件并保存图像
 process_all_pcap_files(root_dir, output_root_dir)
