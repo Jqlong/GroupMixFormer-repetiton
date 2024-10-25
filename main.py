@@ -10,6 +10,7 @@ from tqdm import tqdm
 from data.utils import TrafficImageDataset
 from MyModel import SimpleCNN
 from sklearn.metrics import accuracy_score, confusion_matrix
+print(torch.cuda.is_available())
 
 # 定义图像变换（例如，调整大小，转为张量，归一化等）
 transform = transforms.Compose([
@@ -28,8 +29,8 @@ test_size = len(dataset) - train_size
 train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
 
 # 创建数据加载器
-train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True)
-test_loader = DataLoader(test_dataset, batch_size=128, shuffle=False)
+train_loader = DataLoader(train_dataset, batch_size=2048, shuffle=True)
+test_loader = DataLoader(test_dataset, batch_size=2048, shuffle=False)
 
 # 检查数据集
 # for images, labels in train_loader:
@@ -39,7 +40,7 @@ test_loader = DataLoader(test_dataset, batch_size=128, shuffle=False)
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 
 # 初始化模型、损失函数和优化器
-model = SimpleCNN().to(device)
+model = SimpleCNN(in_channels=1, out_channels=16).to(device)
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=0.001)
 
@@ -48,7 +49,7 @@ acc_list = []
 
 # 训练模型
 # for epoch in range(10):  # 训练10个epoch
-for epoch in tqdm(range(10), desc="Processing"):
+for epoch in tqdm(range(100), desc="Processing"):
     running_loss = 0.0
     total_preds = []
     total_labels = []
@@ -79,7 +80,7 @@ for epoch in tqdm(range(10), desc="Processing"):
     epoch_list.append(epoch)
     acc_list.append(acc)
 
-    print(f"Epoch {epoch + 1}, Loss: {running_loss / len(train_loader)}")
+    print(f"Epoch {epoch + 1}, Loss: {running_loss / len(train_loader)}, Acc: {acc}")
 
 # 可视化训练过程中的准确率变化
 plt.plot(epoch_list, acc_list, label='Train Accuracy')

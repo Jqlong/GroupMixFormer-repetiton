@@ -219,7 +219,7 @@ class ConvPosEnc(nn.Module):
 
 class ConvStem(nn.Module):
     """ Image to Patch Embedding """
-    def __init__(self, in_dim=1, embedding_dims=64):  # 输入维度为1
+    def __init__(self, in_dim=3, embedding_dims=64):
         super().__init__()
         mid_dim = embedding_dims // 2
 
@@ -332,12 +332,12 @@ class GroupMixFormer(nn.Module):
             self,
             patch_size=4, # seem useless
             in_dim=3, # seem useless
-            num_stages = 3,  # 减少深度
-            num_classes=10,  # 类别改为10
-            embedding_dims= [64, 128, 256],
-            serial_depths=[2, 4, 4],
-            num_heads=4,
-            mlp_ratios=[4, 4, 4],
+            num_stages = 4,
+            num_classes=1000,
+            embedding_dims= [80, 160, 320, 320],
+            serial_depths=[2, 4, 12, 4],
+            num_heads=8,
+            mlp_ratios=[4, 4, 4, 4],
             qkv_bias=True,
             qk_scale=None,
             drop_rate=0.0,
@@ -436,22 +436,24 @@ class GroupMixFormer(nn.Module):
             return x
 
 
-# if __name__ == "__main__":
-#     device = 'cuda'
-#     model = GroupMixFormer().to(device)
-#     model.eval()
-#     inputs = torch.randn(1, 3, 224, 224).to(device)
-#     model(inputs)
-#
-#     from fvcore.nn import FlopCountAnalysis, ActivationCountAnalysis, flop_count_table
-#
-#     flops = FlopCountAnalysis(model, inputs)
-#     param = sum(p.numel() for p in model.parameters() if p.requires_grad)
-#     acts = ActivationCountAnalysis(model, inputs)
-#
-#     print(f"total flops : {flops.total()}")
-#     print(f"total activations: {acts.total()}")
-#     print(f"number of parameter: {param}")
-#
-#     print(flop_count_table(flops, max_depth=1))
+if __name__ == "__main__":
+    print(torch.cuda.is_available())
+    device = 'cuda:0'
+    model = GroupMixFormer().to(device)
+    model.eval()
+    inputs = torch.randn(1, 3, 224, 224).to(device)
+    output = model(inputs)
+    print(inputs.shape)
+
+    # from fvcore.nn import FlopCountAnalysis, ActivationCountAnalysis, flop_count_table
+    #
+    # flops = FlopCountAnalysis(model, inputs)
+    # param = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    # acts = ActivationCountAnalysis(model, inputs)
+    #
+    # print(f"total flops : {flops.total()}")
+    # print(f"total activations: {acts.total()}")
+    # print(f"number of parameter: {param}")
+    #
+    # print(flop_count_table(flops, max_depth=1))
 
