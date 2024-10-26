@@ -200,26 +200,32 @@ class ConvPosEnc(nn.Module):
         self.proj = nn.Conv2d(dim, dim, k, 1, k // 2, groups=dim)
 
     def forward(self, x, size):
-        print(x.shape)
+        # 形状为 (B, N, C)，其中 B 是批次大小，N 是特征序列的长度（在图像中对应于补丁的数量），C 是特征的通道数。
         B, N, C = x.shape
-        H, W = size
+        H, W = size  # 特征图的高度和宽度
         assert N == H * W
 
         # Depthwise convolution.
-        feat = x.transpose(1, 2).view(B, C, H, W)
+        feat = x.transpose(1, 2).view(B, C, H, W)  # 输入 x 重新排列和重塑为四维张量，以适应卷积层的输入要求
+        # 残差连接
         x = self.proj(feat) + feat
+        # x 被重新整理和转置回原始的三维形状 (B, N, C)，以便可以继续传递到模型的后续部分
         x = x.flatten(2).transpose(1, 2)
         return x
 
 
 class ConvStem(nn.Module):
     """ Image to Patch Embedding """
+    '''负责将输入图像转换为一系列特征图，这些特征图将被送入后续的网络结构中进行更深层次的特征提取'''
     def __init__(self, in_dim=3, embedding_dims=64):
         super().__init__()
         mid_dim = embedding_dims // 2
 
+        # 第一个卷积层，将输入通道从3转换为mid_dim
         self.proj1 = nn.Conv2d(in_dim, mid_dim, kernel_size=3, stride=2, padding=1)
+        # 标准化层，用于规范化特征图的分布  这是多GPU归一化同步，可使用普通的
         self.norm1 = nn.SyncBatchNorm(mid_dim)
+        # 激活函数，这里使用的是 Hardswish
         self.act1 = nn.Hardswish()
 
         self.proj2 = nn.Conv2d(mid_dim, embedding_dims, kernel_size=3, stride=2, padding=1)
@@ -251,18 +257,26 @@ class PatchEmbedLayer(nn.Module):
             patch_size = 1
             in_dim = embedding_dims
 
+        # 转换为一个二元组
         patch_size = to_2tuple(patch_size)
         self.patch_size = patch_size
 
+        # 可分离卷积，用于将输入特征图分割成补丁
         self.proj = SeparableConv2d(in_dim, embedding_dims, 3, patch_size, 1)
+        # 标准化层，用于规范化补丁的分布
         self.norm = nn.SyncBatchNorm(embedding_dims)
+        # 激活函数，这里使用的是 Hardswish
         self.act = nn.Hardswish()
 
     def forward(self, x):
         _, _, H, W = x.shape
         out_H, out_W = H // self.patch_size[0], W // self.patch_size[1]
+        # 应用可分离卷积，将特征图分割成补丁
         x = self.act(self.norm(self.proj(x)))
+        # 将特征图转换为 (B, N, C) 的形状，其中 N 是补丁的数量，C 是每个补丁的通道数
         x = x.flatten(2).transpose(1, 2)
+
+        # 返回转换后的补丁和新的特征图的高度和宽度
         return x, (out_H, out_W)
 
 
@@ -272,7 +286,7 @@ class GMA_Block(nn.Module):
                  ):
         super().__init__()
         self.cpe = ConvPosEnc(dim=dim, k=3)
-        self.norm1 = norm_layer(dim)
+        self.norm1 = norm_layer(dim)  # 规范化层
         self.att = EfficientAtt(
             dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop,)
         self.drop_path_rate = DropPath(drop_path_rate) if drop_path_rate > 0. else nn.Identity()
@@ -326,9 +340,9 @@ class GroupMixFormer(nn.Module):
     def __init__(
             self,
             patch_size=4, # seem useless
-            in_dim=1, # seem useless
+            in_dim=3, # seem useless
             num_stages = 4,
-            num_classes=10,
+            num_classes=1000,
             embedding_dims= [80, 160, 320, 320],
             serial_depths=[2, 4, 12, 4],
             num_heads=8,
@@ -381,7 +395,7 @@ class GroupMixFormer(nn.Module):
 
         # Classification head(s).
         if not self.return_interm_layers:
-            self.norm4 = nn.SyncBatchNorm(embedding_dims[3])  # 批量归一化 nn.BatchNorm1d(embedding_dims[3])
+            self.norm4 = nn.SyncBatchNorm(embedding_dims[3])
             self.head = nn.Linear(embedding_dims[3], num_classes)
 
         self.apply(self._init_weights)
@@ -409,6 +423,7 @@ class GroupMixFormer(nn.Module):
     def forward_features(self, x):
         b, _, _, _ = x.shape
         x = self.conv_stem(x)
+        print("将图像嵌入为补丁形状", x.shape)
         out = []
 
         for i in range(self.num_stages):
@@ -423,8 +438,9 @@ class GroupMixFormer(nn.Module):
         if self.return_interm_layers:  # Return intermediate features (for down-stream tasks).
             return self.forward_features(x)
         else:  # Return features for classification.
+            print("初始形状", x.shape)
             x = self.forward_features(x)
-            # print('x.shape', x.shape)
+
             x = self.norm4(x[-1])
             x = x.mean(dim=(2, 3))
             x = self.head(x)
@@ -436,9 +452,9 @@ if __name__ == "__main__":
     device = 'cuda:0'
     model = GroupMixFormer().to(device)
     model.eval()
-    inputs = torch.randn(1, 1, 48, 48).to(device)
+    inputs = torch.randn(1, 3, 224, 224).to(device)
     output = model(inputs)
-    print(output.shape)
+    # print(output.shape)
 
     # from fvcore.nn import FlopCountAnalysis, ActivationCountAnalysis, flop_count_table
     #
