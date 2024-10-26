@@ -5,17 +5,11 @@ import torch.nn.functional as F
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
-from timm.models.registry import register_model
+# from timm.models.registry import register_model
 
 from einops import rearrange
 from functools import partial
 from torch import nn, einsum
-
-__all__ = [
-    "groupmixformer_tiny",
-    "groupmixformer_small",
-    "groupmixformer_base",
-]
 
 
 class Mlp(nn.Module):
@@ -206,6 +200,7 @@ class ConvPosEnc(nn.Module):
         self.proj = nn.Conv2d(dim, dim, k, 1, k // 2, groups=dim)
 
     def forward(self, x, size):
+        print(x.shape)
         B, N, C = x.shape
         H, W = size
         assert N == H * W
@@ -331,9 +326,9 @@ class GroupMixFormer(nn.Module):
     def __init__(
             self,
             patch_size=4, # seem useless
-            in_dim=3, # seem useless
+            in_dim=1, # seem useless
             num_stages = 4,
-            num_classes=1000,
+            num_classes=10,
             embedding_dims= [80, 160, 320, 320],
             serial_depths=[2, 4, 12, 4],
             num_heads=8,
@@ -386,7 +381,7 @@ class GroupMixFormer(nn.Module):
 
         # Classification head(s).
         if not self.return_interm_layers:
-            self.norm4 = nn.SyncBatchNorm(embedding_dims[3])
+            self.norm4 = nn.SyncBatchNorm(embedding_dims[3])  # 批量归一化 nn.BatchNorm1d(embedding_dims[3])
             self.head = nn.Linear(embedding_dims[3], num_classes)
 
         self.apply(self._init_weights)
@@ -429,7 +424,7 @@ class GroupMixFormer(nn.Module):
             return self.forward_features(x)
         else:  # Return features for classification.
             x = self.forward_features(x)
-
+            # print('x.shape', x.shape)
             x = self.norm4(x[-1])
             x = x.mean(dim=(2, 3))
             x = self.head(x)
@@ -441,9 +436,9 @@ if __name__ == "__main__":
     device = 'cuda:0'
     model = GroupMixFormer().to(device)
     model.eval()
-    inputs = torch.randn(1, 3, 224, 224).to(device)
+    inputs = torch.randn(1, 1, 48, 48).to(device)
     output = model(inputs)
-    print(inputs.shape)
+    print(output.shape)
 
     # from fvcore.nn import FlopCountAnalysis, ActivationCountAnalysis, flop_count_table
     #

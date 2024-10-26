@@ -62,7 +62,7 @@ class GroupMixFormerCustom(GroupMixFormer):
 
 
 model = GroupMixFormerCustom(num_classes=10).to("cuda:0")
-model = torch.nn.parallel.DistributedDataParallel(model.to('cuda:0'))
+# model = torch.nn.parallel.DistributedDataParallel(model.to('cuda:0'))
 
 session_image = torch.randn(8, 1, 48, 48).to("cuda:0")  # 假设batch_size=8
 
