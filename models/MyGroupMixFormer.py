@@ -1,71 +1,66 @@
-from functools import partial
-
+import ipdb
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
-from torch import nn
 
-from models.groupmixformer import GroupMixFormer, ConvStem
+from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from timm.models.layers import DropPath, to_2tuple, trunc_normal_
+# from timm.models.registry import register_model
+
+from einops import rearrange
+from functools import partial
+from torch import nn, einsum
 
 
-class GroupMixFormerCustom(GroupMixFormer):
-    def __init__(
-            self,
-            patch_size=4,
-            in_dim=1,  # 单通道灰度输入
-            num_stages=4,
-            num_classes=10,  # 根据您的分类类别设置为10
-            embedding_dims=[64, 128, 256, 256],  # 适当调整以适应较小输入尺寸
-            serial_depths=[2, 4, 4, 2],  # 减少深度以提高效率
-            num_heads=8,
-            mlp_ratios=[4, 4, 4, 4],
-            qkv_bias=True,
-            qk_scale=None,
-            drop_rate=0.0,
-            attn_drop_rate=0.0,
-            drop_path_rate=0.2,
-            norm_layer=partial(nn.LayerNorm, eps=1e-6),
-            return_interm_layers=False,
-    ):
-        super(GroupMixFormerCustom, self).__init__(
-            patch_size=patch_size,
-            in_dim=in_dim,  # 设为1以支持灰度图
-            num_stages=num_stages,
-            num_classes=num_classes,
-            embedding_dims=embedding_dims,
-            serial_depths=serial_depths,
-            num_heads=num_heads,
-            mlp_ratios=mlp_ratios,
-            qkv_bias=qkv_bias,
-            qk_scale=qk_scale,
-            drop_rate=drop_rate,
-            attn_drop_rate=attn_drop_rate,
-            drop_path_rate=drop_path_rate,
-            norm_layer=norm_layer,
-            return_interm_layers=return_interm_layers
-        )
+class ConStem:
+    pass
 
-        # 调整conv_stem接受单通道输入
-        self.conv_stem = ConvStem(in_dim=1, embedding_dims=embedding_dims[0])
 
-        # 如果不返回中间层，调整norm层
-        if not self.return_interm_layers:
-            self.norm4 = nn.LayerNorm(embedding_dims[-1])
-            self.head = nn.Linear(embedding_dims[-1], num_classes)
+class PatchEmbedLayer(nn.Module):
+    pass
+
+
+class GMA_Stage(nn.Module):
+    pass
+
+
+class MyGroupMixModel(nn.Module):
+    def __init__(self):
+        super(MyGroupMixModel, self).__init__()
+
+        # 将图像转换为补丁
+        self.conv_stem = ConStem()
+
+        # 将经过 ConvStem 处理的特征图进一步转换为一系列的补丁（patches）
+        self.patch_embed_layers = nn.ModuleList([
+            PatchEmbedLayer() for i in range(4)
+        ])
+
+        # 模型的基本构建块和阶段
+        self.groupmixformer = nn.ModuleList([
+            GMA_Stage() for i in range(4)
+        ])
+
+        # 归一化
+        self.norm = nn.BatchNorm2d(num_features=0)
+        # 分类
+        self.fc = nn.Linear(in_features=0, out_features=10)
+
+    def forward_features(self, x):
+        return x
 
     def forward(self, x):
-        # 预处理或调整x为48x48
-        x = F.interpolate(x, size=(48, 48), mode='bilinear', align_corners=False)
-        return super().forward(x)
+        # 进行特征提取
+        x = self.forward_features(x)
+
+        # 归一化
+        x = self.norm(x)
+
+        # 对张量的第2维和第3维进行平均操作
+        x = x.mean(dim=(2, 3))
+
+        # 分类
+        x = self.fc(x)
+        return x
 
 
-# 实例化自定义模型
-
-
-model = GroupMixFormerCustom(num_classes=10).to("cuda:0")
-# model = torch.nn.parallel.DistributedDataParallel(model.to('cuda:0'))
-
-session_image = torch.randn(8, 1, 48, 48).to("cuda:0")  # 假设batch_size=8
-
-output = model(session_image)
-
-print(output.shape)

@@ -55,14 +55,14 @@ class Aggregator(nn.Module):
 
         seg_dim = self.dim // self.seg
 
-        self.norm0 = nn.SyncBatchNorm(seg_dim)
+        self.norm0 = nn.SyncBatchNorm(seg_dim)  # 批量归一化
         self.act0 = nn.Hardswish()
 
         self.agg1 = SeparableConv2d(seg_dim, seg_dim, 3, 1, 1)
         self.norm1 = nn.SyncBatchNorm(seg_dim)
         self.act1 = nn.Hardswish()
 
-        self.agg2 = SeparableConv2d(seg_dim, seg_dim, 5, 1, 2)
+        self.agg2 = SeparableConv2d(seg_dim, seg_dim, 5, 1, 2)  # 可分离卷积层
         self.norm2 = nn.SyncBatchNorm(seg_dim)
         self.act2 = nn.Hardswish()
 
@@ -70,10 +70,12 @@ class Aggregator(nn.Module):
         self.norm3 = nn.SyncBatchNorm(seg_dim)
         self.act3 = nn.Hardswish()
 
-        self.agg0 = Agg_0(seg_dim)
+        self.agg0 = Agg_0(seg_dim)  # 对最后一部分特征进行处理
 
 
     def forward(self, x, size, num_head):
+
+        # 输入 x 是一个三维特征张量，形状为 (B, N, C)
         B, N, C = x.shape
         H, W = size
         assert N == H * W
@@ -81,8 +83,10 @@ class Aggregator(nn.Module):
         x = x.transpose(1, 2).view(B, C, H, W)
         seg_dim = self.dim // self.seg
 
+        # 将输入特征分割成 seg 个部分
         x = x.split([seg_dim]*self.seg, dim=1)
 
+        # 分割后的第五部分特征，它通过 Agg_0 模块进行处理
         x_local = x[4].reshape(3, B//3, seg_dim, H, W).permute(1,0,2,3,4).reshape(B//3, 3*seg_dim, H, W)
         x_local = self.agg0(x_local)
 
@@ -101,6 +105,7 @@ class Aggregator(nn.Module):
 
 class ConvRelPosEnc(nn.Module):
     """ Convolutional relative position encoding. """
+    # 添加相对位置信息
 
     def __init__(self, Ch, h, window):
         super().__init__()
@@ -158,11 +163,14 @@ class EfficientAtt(nn.Module):
         head_dim = dim // num_heads
         self.scale = qk_scale or head_dim ** -0.5
 
-        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
+        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)  # 输入特征映射到三个矩阵：查询（Q）、键（K）和值（V）
+
+        # dropout层，用于正则化和防止过拟合
         self.attn_drop = nn.Dropout(attn_drop)  # Note: attn_drop is actually not used.
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
 
+        # 聚合器模块，它将输入特征分割成多个部分，并通过不同的卷积核大小处理这些部分，以捕获不同尺度的特征。
         self.aggregator = Aggregator(dim=dim, seg=5)
 
         trans_dim = dim // 5 * 4
@@ -172,15 +180,20 @@ class EfficientAtt(nn.Module):
         B, N, C = x.shape
 
         # Q, K, V.
+        # 计算查询（Q）、键（K）和值（V）。
         qkv = self.qkv(x).reshape(B, N, 3, C).permute(2, 0, 1, 3).reshape(3*B, N, C)
 
+        # 处理 qkv 输出，将其分割并聚合特征。
         qkv, x_agg0 = self.aggregator(qkv, size, self.num_heads)
         q, k, v = qkv[0], qkv[1], qkv[2]
 
         # att
+        # 计算键的softmax，用于注意力权重。
         k_softmax = k.softmax(dim=2)
         k_softmax_T_dot_v = einsum('b h n k, b h n v -> b h k v', k_softmax, v)
+        # 计算有效的注意力输出。
         eff_att = einsum('b h n k, b h k v -> b h n v', q, k_softmax_T_dot_v)
+        # 计算卷积相对位置编码。
         crpe = self.crpe(q, v, size=size)
         # Merge and reshape.
         x = self.scale * eff_att + crpe
